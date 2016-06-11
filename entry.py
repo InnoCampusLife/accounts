@@ -193,7 +193,7 @@ class AccountsAuthorizedActions(Resource):
 
         return RESULT_OK()
 
-    def list(self, token):
+    def listAccounts(self, token):
         account = get_account_by_token(token)
 
         if account == None or account['role'] != 'moderator':
