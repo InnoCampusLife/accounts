@@ -10,3 +10,7 @@ WEB_PORT = 5000
 DB_HOST = 'localhost'
 DB_PORT = 27017
 
+# logging
+
+LOG_GLOBAL = 'global.log'
+LOG_SUMMARY = 'summary.log'
