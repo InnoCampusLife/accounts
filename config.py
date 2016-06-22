@@ -14,3 +14,7 @@ DB_PORT = 27017
 
 LOG_GLOBAL = 'global.log'
 LOG_SUMMARY = 'summary.log'
+
+# content
+
+STATIC_FOLDER = './../frontend'

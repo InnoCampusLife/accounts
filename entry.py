@@ -1,7 +1,7 @@
 import logging
 
 from bson import ObjectId
-from flask import Flask
+from flask import Flask, send_from_directory
 from flask_restful import reqparse, Api, Resource, request
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, \
@@ -9,9 +9,9 @@ from werkzeug.security import generate_password_hash, \
 
 import config
 import utils
-import logging
 
 # constants
+import utils.common
 
 API_PREFIX = '/api/v%s/%s' % (config.VERSION, config.APP_NAME)
 
@@ -39,23 +39,6 @@ def get_account_by_token(token):
 
 def get_account_by_id(id):
     return accounts_collection.find_one({'_id': ObjectId(id)})
-
-
-def slice_account(account, with_token=True):
-    if account is None:
-        return None
-
-    out = {'id': str(account['_id']),
-           'username': account['username'],
-           'role': account['role'],
-           'firstName': account['firstName'],
-           'lastName': account['lastName']
-           }
-
-    if with_token:
-        out['token'] = account['token']
-
-    return out
 
 
 def RESULT(status, result, code):
@@ -125,7 +108,7 @@ def format_log_params(**kwargs):
 
 class Account(object):
     def generate_token(self):
-        return utils.random_string(32)
+        return utils.common.random_string(32)
 
     def __init__(self, username, password,
                  tgId=None, role='ghost', studyGroup=None,
@@ -150,16 +133,14 @@ class AccountsBasic(Resource):
         app.logger.info(format_log_params(**get_basic_request_params(request),
                                           method='getAccount',
                                           token=token))
-        exclude_fields = ['_id', 'token', 'password']
+        exclude_fields = ['token', 'password']
 
         matching_acc = get_account_by_token(token)
 
         if matching_acc is None:
             return RESULT_FAIL_ON_CLIENT()
 
-        matching_acc['id'] = str(matching_acc['_id'])
-
-        return RESULT_OK(result=utils.exclude_fields(matching_acc, exclude_fields))
+        return RESULT_OK(result=utils.common.filter_fields(matching_acc, exclude_fields))
 
 
     '''
@@ -201,7 +182,11 @@ class AccountsBasic(Resource):
 
         accounts_collection.insert_one(acc_hash)
 
-        return RESULT_OK_CREATED(result=slice_account(acc_hash))
+        return RESULT_OK_CREATED(
+            result=utils.common.filter_fields(
+                acc_hash, None,
+                ['id', 'username', 'role',
+                 'firstName', 'lastName', 'token']))
 
 
 class AccountsAuthorizedActions(Resource):
@@ -262,7 +247,10 @@ class AccountsAuthorizedActions(Resource):
         found_accounts_slices = []
 
         for acc in found_accounts:
-            found_accounts_slices.append(slice_account(acc, False))
+            found_accounts_slices\
+                .append(utils.common.filter_fields(acc,
+                                                   None,
+                                                   ['id', 'username', 'role', 'firstName', 'lastName']))
 
         return RESULT_OK(result=found_accounts_slices)
 
@@ -271,14 +259,16 @@ class AccountsAuthorizedActions(Resource):
                                           method=action,
                                           token=token))
         handlers = {'get': {'exists': self.exists,
-                            'list': self.listAccounts},
+                            'listAccounts': self.listAccounts},
                     'put': {'updateRole': self.updateRole}}
 
-        # TODO: filter for field names
         if action in dir(self):
+            if method not in handlers or action not in handlers[method]:
+                return RESULT_FAIL_ON_CLIENT()
+
             func = handlers[method][action]
 
-            if utils.is_function(func):
+            if utils.common.is_function(func):
                 return func(token)
             else:
                 return RESULT_FAIL_ON_CLIENT()
@@ -325,7 +315,11 @@ class AccountsUnauthorizedActions(Resource):
         authorized = check_password_hash(acc_password, password)
 
         if authorized:
-            return RESULT_OK(result=slice_account(account))
+            return RESULT_OK(
+                result=utils.common.filter_fields(account,
+                                                  None,
+                                                  ['id', 'username', 'role',
+                                                   'firstName', 'lastName', 'token']))
         else:
             return RESULT_FAIL_ON_CLIENT()
 
@@ -335,12 +329,22 @@ class AccountsUnauthorizedActions(Resource):
         if action in dir(self):
             func = getattr(self, action)
 
-            if utils.is_function(func):
+            if utils.common.is_function(func):
                 return func()
             else:
                 return RESULT_FAIL_ON_CLIENT()
         else:
             return RESULT_FAIL_ON_CLIENT()
+
+
+@api.app.route('/')
+def serve_page():
+    return send_from_directory(config.STATIC_FOLDER, 'index.html')
+
+
+@api.app.route('/<path:path>')
+def serve_files(path):
+    return send_from_directory(config.STATIC_FOLDER, path)
 
 
 api.add_resource(AccountsUnauthorizedActions, '/<string:action>')
