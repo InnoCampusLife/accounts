@@ -41,25 +41,28 @@ def get_account_by_id(id):
     return accounts_collection.find_one({'_id': ObjectId(id)})
 
 
-def RESULT(status, result, code):
+def RESULT(status, result, code, error):
     out = {'status': status}
 
     if result is not None:
         out['result'] = result
 
+    if error is not None:
+        out['error'] = error
+
     return out, code
 
 
 def RESULT_OK(result=None, code=200):
-    return RESULT('ok', result, code)
+    return RESULT('ok', result, code, None)
 
 
 def RESULT_OK_CREATED(result=None, code=201):
-    return RESULT('ok', result, code)
+    return RESULT('ok', result, code, None)
 
 
-def RESULT_FAIL_ON_CLIENT(status='fail', result=None, code=400):
-    return RESULT(status, result, code)
+def RESULT_FAIL_ON_CLIENT(error, status='fail', code=400):
+    return RESULT(status, None, code, error)
 
 
 def setup_logger():
@@ -138,7 +141,7 @@ class AccountsBasic(Resource):
         matching_acc = get_account_by_token(token)
 
         if matching_acc is None:
-            return RESULT_FAIL_ON_CLIENT()
+            return RESULT_FAIL_ON_CLIENT('Unknown token')
 
         return RESULT_OK(result=utils.common.filter_fields(matching_acc, exclude_fields))
 
@@ -159,20 +162,20 @@ class AccountsBasic(Resource):
         args_names = args.keys()
 
         if 'username' not in args_names or 'password' not in args_names:
-            return RESULT_FAIL_ON_CLIENT()
+            return RESULT_FAIL_ON_CLIENT('Missing username or password parameters')
 
         username = args['username']
         password = args['password']
 
         if username == None or password == None:
-            return RESULT_FAIL_ON_CLIENT()
+            return RESULT_FAIL_ON_CLIENT('Missing username or password parameters')
 
         # check if username is taken
         acc = get_account_by_username(username)
 
         if acc is not None:
             # it is, so try choosing another one
-            return RESULT_FAIL_ON_CLIENT()
+            return RESULT_FAIL_ON_CLIENT('Username is already taken')
 
         # create new account
 
@@ -202,10 +205,10 @@ class AccountsAuthorizedActions(Resource):
         moderator_account = get_account_by_token(token)
 
         if moderator_account is None:
-            return RESULT_FAIL_ON_CLIENT()
+            return RESULT_FAIL_ON_CLIENT('Unknown token')
 
         if moderator_account['role'] != 'moderator':
-            return RESULT_FAIL_ON_CLIENT()
+            return RESULT_FAIL_ON_CLIENT('Unexpected account role. Needed: moderator')
 
         parser = reqparse.RequestParser()
 
@@ -216,7 +219,7 @@ class AccountsAuthorizedActions(Resource):
         args_names = args.keys()
 
         if 'accountId' not in args_names or 'newRole' not in args_names:
-            return RESULT_FAIL_ON_CLIENT()
+            return RESULT_FAIL_ON_CLIENT('No accountID specified')
 
         editable_user_account_id = args['accountId']
         new_role = args['newRole']
@@ -224,7 +227,7 @@ class AccountsAuthorizedActions(Resource):
         # TODO: advanced permission management
 
         if editable_user_account_id == None or new_role == None or new_role not in ['student', 'ghost']:
-            return RESULT_FAIL_ON_CLIENT()
+            return RESULT_FAIL_ON_CLIENT('accountID provided is not valid(probably, roles do not match)')
 
         editable_action_account = get_account_by_id(editable_user_account_id)
         editable_action_account['role'] = new_role
@@ -238,7 +241,7 @@ class AccountsAuthorizedActions(Resource):
         account = get_account_by_token(token)
 
         if account == None or account['role'] != 'moderator':
-            return RESULT_FAIL_ON_CLIENT()
+            return RESULT_FAIL_ON_CLIENT('Unknown token')
 
         found_accounts = list(accounts_collection\
             .find({'role': {'$in': ['student', 'ghost']}})\
@@ -264,16 +267,16 @@ class AccountsAuthorizedActions(Resource):
 
         if action in dir(self):
             if method not in handlers or action not in handlers[method]:
-                return RESULT_FAIL_ON_CLIENT()
+                return RESULT_FAIL_ON_CLIENT('No action handler provided for action: %s' % action)
 
             func = handlers[method][action]
 
             if utils.common.is_function(func):
                 return func(token)
             else:
-                return RESULT_FAIL_ON_CLIENT()
+                return RESULT_FAIL_ON_CLIENT('No action handler provided for action: %s' % action)
         else:
-            return RESULT_FAIL_ON_CLIENT()
+            return RESULT_FAIL_ON_CLIENT('No action handler provided for action: %s' % action)
 
     def get(self, token, action):
         return self.process_request('get', token, action)
@@ -296,19 +299,19 @@ class AccountsUnauthorizedActions(Resource):
         args_names = args.keys()
 
         if 'username' not in args_names or 'password' not in args_names:
-            return RESULT_FAIL_ON_CLIENT()
+            return RESULT_FAIL_ON_CLIENT('Missing username or password parameters')
 
         username = args['username']
         password = args['password']
 
         # create new account
         if username == None or password == None:
-            return RESULT_FAIL_ON_CLIENT()
+            return RESULT_FAIL_ON_CLIENT('Missing username or password parameters')
 
         account = get_account_by_username(username)
 
         if account == None:
-            return RESULT_FAIL_ON_CLIENT()
+            return RESULT_FAIL_ON_CLIENT('No account with a username given')
 
         acc_password = account['password']
 
@@ -332,9 +335,9 @@ class AccountsUnauthorizedActions(Resource):
             if utils.common.is_function(func):
                 return func()
             else:
-                return RESULT_FAIL_ON_CLIENT()
+                return RESULT_FAIL_ON_CLIENT('No action handler provided for action: %s' % action)
         else:
-            return RESULT_FAIL_ON_CLIENT()
+            return RESULT_FAIL_ON_CLIENT('No action handler provided for action: %s' % action)
 
 
 @api.app.route('/')
