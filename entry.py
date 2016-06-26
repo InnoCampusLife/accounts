@@ -266,7 +266,7 @@ class AccountsAuthorizedActions(Resource):
                     'put': {'updateRole': self.updateRole}}
 
         if action in dir(self):
-            if method not in handlers or action not in handlers[method]:
+            if method not in handlers.keys() or action not in handlers[method]:
                 return RESULT_FAIL_ON_CLIENT('No action handler provided for action: %s' % action)
 
             func = handlers[method][action]
@@ -311,7 +311,7 @@ class AccountsUnauthorizedActions(Resource):
         account = get_account_by_username(username)
 
         if account == None:
-            return RESULT_FAIL_ON_CLIENT('No account with a username given')
+            return RESULT_FAIL_ON_CLIENT('Unknown username or password')
 
         acc_password = account['password']
 
@@ -324,7 +324,7 @@ class AccountsUnauthorizedActions(Resource):
                                                   ['id', 'username', 'role',
                                                    'firstName', 'lastName', 'token']))
         else:
-            return RESULT_FAIL_ON_CLIENT()
+            return RESULT_FAIL_ON_CLIENT('Unknown username or password')
 
     def post(self, action):
         app.logger.info(format_log_params(**get_basic_request_params(request),
