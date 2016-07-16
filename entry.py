@@ -1,4 +1,5 @@
 import logging
+import re
 
 from bson import ObjectId
 from flask import Flask, send_from_directory
@@ -32,7 +33,8 @@ accounts_collection = accounts_db.accounts
 
 
 def get_account_by_username(username):
-    return accounts_collection.find_one({'username': username})
+    username_regex = re.compile(('^%s$' % username), re.IGNORECASE)
+    return accounts_collection.find_one({'username': {'$regex': username_regex}})
 
 
 def get_account_by_token(token):
