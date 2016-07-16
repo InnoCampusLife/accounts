@@ -6,8 +6,8 @@ def random_string(size=32, chars=string.ascii_letters + string.digits):
     return ''.join(random.choice(chars) for _ in range(size))
 
 
-def filter_fields(data, exclude_fields, keep_fields=None, **kwargs):
-    '''
+def filter_dict_fields(data, exclude_fields, keep_fields=None, **kwargs):
+    """
     Filter object and leave only allowed fields.
 
     :param data: object to be filtered
@@ -15,7 +15,7 @@ def filter_fields(data, exclude_fields, keep_fields=None, **kwargs):
     :param keep_fields: field names to keep. optional(exclusive with exclude_field)
     :param kwargs: other params
     :return: filtered object
-    '''
+    """
 
     if data is None:
         return None

@@ -9,9 +9,11 @@ from werkzeug.security import generate_password_hash, \
 
 import config
 import utils
+import utils.common
+from utils.validators import is_password_valid
+from utils.validators import is_username_valid
 
 # constants
-import utils.common
 
 API_PREFIX = '/api/v%s/%s' % (config.VERSION, config.APP_NAME)
 
@@ -143,7 +145,7 @@ class AccountsBasic(Resource):
         if matching_acc is None:
             return RESULT_FAIL_ON_CLIENT('Unknown token')
 
-        return RESULT_OK(result=utils.common.filter_fields(matching_acc, exclude_fields))
+        return RESULT_OK(result=utils.common.filter_dict_fields(matching_acc, exclude_fields))
 
 
     '''
@@ -167,8 +169,11 @@ class AccountsBasic(Resource):
         username = args['username']
         password = args['password']
 
-        if username == None or password == None:
+        if username is None or password is None:
             return RESULT_FAIL_ON_CLIENT('Missing username or password parameters')
+
+        if (not is_username_valid(username)) or (not is_password_valid(password)):
+            return RESULT_FAIL_ON_CLIENT('Incorrect username or password formation: illegal length or content')
 
         # check if username is taken
         acc = get_account_by_username(username)
@@ -186,7 +191,7 @@ class AccountsBasic(Resource):
         accounts_collection.insert_one(acc_hash)
 
         return RESULT_OK_CREATED(
-            result=utils.common.filter_fields(
+            result=utils.common.filter_dict_fields(
                 acc_hash, None,
                 ['id', 'username', 'role',
                  'firstName', 'lastName', 'token']))
@@ -226,7 +231,7 @@ class AccountsAuthorizedActions(Resource):
 
         # TODO: advanced permission management
 
-        if editable_user_account_id == None or new_role == None or new_role not in ['student', 'ghost']:
+        if (editable_user_account_id is None) or (new_role is None) or new_role not in ['student', 'ghost']:
             return RESULT_FAIL_ON_CLIENT('accountID provided is not valid(probably, roles do not match)')
 
         editable_action_account = get_account_by_id(editable_user_account_id)
@@ -240,7 +245,7 @@ class AccountsAuthorizedActions(Resource):
     def listAccounts(self, token):
         account = get_account_by_token(token)
 
-        if account == None or account['role'] != 'moderator':
+        if account is None or account['role'] != 'moderator':
             return RESULT_FAIL_ON_CLIENT('Unknown token')
 
         found_accounts = list(accounts_collection\
@@ -251,9 +256,9 @@ class AccountsAuthorizedActions(Resource):
 
         for acc in found_accounts:
             found_accounts_slices\
-                .append(utils.common.filter_fields(acc,
-                                                   None,
-                                                   ['id', 'username', 'role', 'firstName', 'lastName']))
+                .append(utils.common.filter_dict_fields(acc,
+                                                        None,
+                                                        ['id', 'username', 'role', 'firstName', 'lastName']))
 
         return RESULT_OK(result=found_accounts_slices)
 
@@ -305,12 +310,12 @@ class AccountsUnauthorizedActions(Resource):
         password = args['password']
 
         # create new account
-        if username == None or password == None:
+        if username is None or password is None:
             return RESULT_FAIL_ON_CLIENT('Missing username or password parameters')
 
         account = get_account_by_username(username)
 
-        if account == None:
+        if account is None:
             return RESULT_FAIL_ON_CLIENT('Unknown username or password')
 
         acc_password = account['password']
@@ -319,9 +324,9 @@ class AccountsUnauthorizedActions(Resource):
 
         if authorized:
             return RESULT_OK(
-                result=utils.common.filter_fields(account,
-                                                  None,
-                                                  ['id', 'username', 'role',
+                result=utils.common.filter_dict_fields(account,
+                                                       None,
+                                                       ['id', 'username', 'role',
                                                    'firstName', 'lastName', 'token']))
         else:
             return RESULT_FAIL_ON_CLIENT('Unknown username or password')
