@@ -347,16 +347,6 @@ class AccountsUnauthorizedActions(Resource):
             return RESULT_FAIL_ON_CLIENT('No action handler provided for action: %s' % action)
 
 
-@api.app.route('/')
-def serve_page():
-    return send_from_directory(config.STATIC_FOLDER, 'index.html')
-
-
-@api.app.route('/<path:path>')
-def serve_files(path):
-    return send_from_directory(config.STATIC_FOLDER, path)
-
-
 api.add_resource(AccountsUnauthorizedActions, '/<string:action>')
 api.add_resource(AccountsBasic, '/<string:token>', '/')
 api.add_resource(AccountsAuthorizedActions, '/<string:token>/<string:action>')
