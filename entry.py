@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 
 from bson import ObjectId
@@ -355,5 +356,7 @@ api.add_resource(AccountsAuthorizedActions, '/<string:token>/<string:action>')
 if __name__ == '__main__':
     setup_logger()
 
-    app.run(config.WEB_HOST, config.WEB_PORT, debug=True)
+    run_mode = os.environ.get('RUN_MODE')
+
+    app.run(config.WEB_HOST, config.WEB_PORT, debug=(run_mode == 'dev'))
 
