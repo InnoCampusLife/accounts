@@ -21,6 +21,9 @@ MAX_TOKEN_LENGTH = 128
 MIN_ID_LENGTH = 24
 MAX_ID_LENGTH = 128
 
+MIN_PREFERENCES_LENGTH = 2
+MAX_PREFERENCES_LENGTH = 320
+
 USERNAME_PATTERN = '^\w{%s,%s}$' % (MIN_USERNAME_LENGTH, MAX_USERNAME_LENGTH)
 NAME_COMPONENT_PATTERN = '^[\w -]{%s,%s}$' % (MIN_NAME_COMPONENT_LENGTH, MAX_NAME_COMPONENT_LENGTH)
 EMAIL_PATTERN = '^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
@@ -65,3 +68,9 @@ def is_token_valid(token):
 def is_id_valid(id):
     id = id.strip()
     return re.match(ID_PATTERN, id, re.IGNORECASE) is not None
+
+
+def is_preferences_valid(preferences):
+    preferences = preferences.strip()
+    return (lambda password_length: MIN_PREFERENCES_LENGTH <= password_length <= MAX_PREFERENCES_LENGTH)(len(preferences))
+

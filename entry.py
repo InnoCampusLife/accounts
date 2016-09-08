@@ -1,9 +1,10 @@
+import json
 import logging
 import os
 import re
 
 from bson import ObjectId
-from flask import Flask, send_from_directory
+from flask import Flask
 from flask_restful import reqparse, Api, Resource, request
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, \
@@ -13,7 +14,7 @@ import config
 import utils
 import utils.common
 from utils.validators import is_password_valid, is_name_component_valid, is_study_group_valid, is_email_valid, \
-    is_token_valid, is_id_valid
+    is_token_valid, is_id_valid, is_preferences_valid
 from utils.validators import is_username_valid
 
 # constants
@@ -153,7 +154,7 @@ class AccountsBasic(Resource):
         app.logger.info(format_log_params(**get_basic_request_params(request),
                                           method='getAccount',
                                           token=token))
-        exclude_fields = ['token', 'password']
+        exclude_fields = ['token', 'password', 'preferences']
 
         matching_acc = get_account_by_token(token)
 
@@ -375,12 +376,54 @@ class AccountsAuthorizedActions(Resource):
         if searched_acc is None:
             return RESULT_FAIL_ON_CLIENT('User not found')
 
-        return RESULT_OK(result=utils.common.filter_dict_fields(account,
-                                                                None,
-                                                                keep_fields=['firstName',
-                                                                             'lastName',
+        return RESULT_OK(result=utils.common.filter_dict_fields(account, None,
+                                                                keep_fields=['username', 'id', 'role',
+                                                                             'firstName', 'lastName',
                                                                              'studyGroup']))
 
+    def getPreferences(self, token):
+        # TODO: +tests
+        account = get_account_by_token(token)
+
+        if account is None:
+            return RESULT_FAIL_ON_CLIENT('Unknown token')
+
+        preferences = account.get('preferences')
+
+        if preferences is None:
+            preferences = {}
+
+        return RESULT_OK(result=preferences)
+
+    def updatePreferences(self, token):
+        # TODO: +tests
+        account = get_account_by_token(token)
+
+        if account is None:
+            return RESULT_FAIL_ON_CLIENT('Unknown token')
+
+        parser = reqparse.RequestParser()
+
+        parser.add_argument('preferences', type=str)
+
+        args = parser.parse_args()
+        preferences_str = args.get('preferences')
+
+        if preferences_str is None:
+            return RESULT_FAIL_ON_CLIENT('No preferences provided')
+
+        if not is_preferences_valid(preferences_str):
+            return RESULT_FAIL_ON_CLIENT('preferences are not valid')
+
+        try:
+            preferences = json.loads(preferences_str)
+        except:
+            return RESULT_FAIL_ON_CLIENT('preferences are not valid')
+
+        accounts_collection.update_one({'_id': ObjectId(account['_id'])},
+                                       {'$set': {'preferences': preferences}})
+
+        return RESULT_OK()
 
     def process_request(self, method, token, action):
         app.logger.info(format_log_params(**get_basic_request_params(request),
@@ -388,8 +431,10 @@ class AccountsAuthorizedActions(Resource):
                                           token=token))
         handlers = {'get': {'exists': self.exists,
                             'listAccounts': self.listAccounts,
-                            'getBio': self.getBio},
-                    'put': {'updateRole': self.updateRole}}
+                            'getBio': self.getBio,
+                            'getPreferences': self.getPreferences},
+                    'put': {'updateRole': self.updateRole,
+                            'updatePreferences': self.updatePreferences}}
 
         if action in dir(self):
             if method not in handlers.keys() or action not in handlers[method]:
@@ -471,8 +516,9 @@ api.add_resource(AccountsBasic, '/<string:token>', '/')
 api.add_resource(AccountsAuthorizedActions, '/<string:token>/<string:action>')
 
 if __name__ == '__main__':
-    setup_logger()
+    # setup_logger()
 
     run_mode = os.environ.get('RUN_MODE')
 
     app.run(config.WEB_HOST, config.WEB_PORT, debug=(run_mode == 'dev'))
+

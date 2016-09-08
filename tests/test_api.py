@@ -282,7 +282,7 @@ class getBioTestCase(unittest.TestCase):
         self.app = app.test_client()
         self.accounts_collection = accounts_collection
         self.accounts_collection.delete_many({'username': correct_account_data['username']})
-        self.expected_fields = {'firstName', 'lastName', 'studyGroup'}
+        self.expected_fields = {'firstName', 'lastName', 'studyGroup', 'role', 'username', 'id'}
 
     def set_role(self, new_role):
         self.accounts_collection.update({'username': correct_account_data['username']},
