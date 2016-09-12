@@ -376,7 +376,7 @@ class AccountsAuthorizedActions(Resource):
         if searched_acc is None:
             return RESULT_FAIL_ON_CLIENT('User not found')
 
-        return RESULT_OK(result=utils.common.filter_dict_fields(account, None,
+        return RESULT_OK(result=utils.common.filter_dict_fields(searched_acc, None,
                                                                 keep_fields=['username', 'id', 'role',
                                                                              'firstName', 'lastName',
                                                                              'studyGroup']))
