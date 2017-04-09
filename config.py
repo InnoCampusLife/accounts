@@ -14,7 +14,7 @@ WEB_PORT = int(env_or_default('WEB_PORT', 5000))
 # database
 
 DB_HOST = env_or_default('DB_HOST', 'localhost')
-DB_PORT = int(env_or_default('DB_PORT', 27017))
+DB_PORT = int(env_or_default('DB_PORT', 32768))
 
 # logging
 

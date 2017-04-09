@@ -1,7 +1,5 @@
 import json
-import logging
 import os
-import re
 
 from bson import ObjectId
 from flask import Flask
@@ -13,6 +11,8 @@ from werkzeug.security import generate_password_hash, \
 import config
 import utils
 import utils.common
+from utils.helpers import RESULT_FAIL_ON_CLIENT, format_log_params, get_basic_request_params, RESULT_OK, \
+    get_account_by_id, get_account_by_username, get_account_by_token, RESULT_OK_CREATED
 from utils.validators import is_password_valid, is_name_component_valid, is_study_group_valid, is_email_valid, \
     is_token_valid, is_id_valid, is_preferences_valid
 from utils.validators import is_username_valid
@@ -30,97 +30,6 @@ db_client = MongoClient(host=config.DB_HOST, port=config.DB_PORT)
 accounts_db = db_client.accounts
 
 accounts_collection = accounts_db.accounts
-
-
-# helper functions
-
-
-def get_account_by_username(username):
-    if not is_username_valid(username):
-        return None
-
-    username_regex = re.compile(('^%s$' % username), re.IGNORECASE)
-
-    return accounts_collection.find_one({'username': {'$regex': username_regex}})
-
-
-def get_account_by_token(token):
-    if not is_token_valid(token):
-        return None
-
-    return accounts_collection.find_one({'token': token})
-
-
-def get_account_by_id(id):
-    if not is_id_valid(id):
-        return None
-
-    return accounts_collection.find_one({'_id': ObjectId(id)})
-
-
-def RESULT(status, result, code, error):
-    out = {'status': status}
-
-    if result is not None:
-        out['result'] = result
-
-    if error is not None:
-        out['error'] = error
-
-    return out, code
-
-
-def RESULT_OK(result=None, code=200):
-    return RESULT('ok', result, code, None)
-
-
-def RESULT_OK_CREATED(result=None, code=201):
-    return RESULT('ok', result, code, None)
-
-
-def RESULT_FAIL_ON_CLIENT(error, status='fail', code=400):
-    return RESULT(status, None, code, error)
-
-
-def setup_logger():
-    log_format = '[%(asctime)s] PID %(process)s (%(pathname)s:%(lineno)d) %(levelname)s: %(message)s'
-
-    logging.basicConfig(format=log_format, filename=config.LOG_GLOBAL, level=logging.DEBUG)
-
-    formatter = logging.Formatter(log_format, '%y-%m-%d %H:%M:%S')
-
-    file_handler = logging.FileHandler(config.LOG_SUMMARY)
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(formatter)
-
-    stream_handler = logging.StreamHandler()
-    stream_handler.setLevel(logging.DEBUG)
-    stream_handler.setFormatter(formatter)
-
-    app.logger.addHandler(file_handler)
-    app.logger.addHandler(stream_handler)
-
-    app.logger.info("Logging has been started.")
-
-
-def get_basic_request_params(request):
-    return {'request_method': request.method,
-            'request_url': request.url,
-            'remote_addr': request.remote_addr}
-
-
-def format_log_params(**kwargs):
-    log_line = ''
-    log_line_template = '%s: %s'
-    kw_items = kwargs.items()
-
-    for i, item in enumerate(kw_items):
-        if i == 0:
-            log_line = '%s' % (log_line_template % (item[0], item[1]))
-        else:
-            log_line = '%s, %s' % (log_line, log_line_template % (item[0], item[1]))
-
-    return log_line
 
 
 # routing
@@ -156,7 +65,7 @@ class AccountsBasic(Resource):
                                           token=token))
         exclude_fields = ['token', 'password', 'preferences']
 
-        matching_acc = get_account_by_token(token)
+        matching_acc = get_account_by_token(accounts_collection, token)
 
         if matching_acc is None:
             return RESULT_FAIL_ON_CLIENT('Unknown token')
@@ -202,7 +111,7 @@ class AccountsBasic(Resource):
             return RESULT_FAIL_ON_CLIENT('Incorrect username or password formation: illegal length or content')
 
         # check if username is taken
-        acc = get_account_by_username(username)
+        acc = get_account_by_username(accounts_collection, username)
 
         if acc is not None:
             # it is, so try choosing another one
@@ -276,17 +185,17 @@ class AccountsAuthorizedActions(Resource):
             if not is_id_valid(user_id):
                 return RESULT_FAIL_ON_CLIENT('Invalid params')
 
-            searched_acc = get_account_by_id(user_id)
+            searched_acc = get_account_by_id(accounts_collection, user_id)
         elif username is not None:
             if not is_username_valid(username):
                 return RESULT_FAIL_ON_CLIENT('Invalid params')
 
-            searched_acc = get_account_by_username(username)
+            searched_acc = get_account_by_username(accounts_collection, username)
 
         return RESULT_OK(result=searched_acc is not None)
 
     def updateRole(self, token):
-        moderator_account = get_account_by_token(token)
+        moderator_account = get_account_by_token(accounts_collection, token)
 
         if moderator_account is None:
             return RESULT_FAIL_ON_CLIENT('Unknown token')
@@ -313,7 +222,7 @@ class AccountsAuthorizedActions(Resource):
         if (editable_user_account_id is None) or (new_role is None) or new_role not in ['student', 'ghost']:
             return RESULT_FAIL_ON_CLIENT('accountID provided is not valid(probably, roles do not match)')
 
-        editable_action_account = get_account_by_id(editable_user_account_id)
+        editable_action_account = get_account_by_id(accounts_collection, editable_user_account_id)
         editable_action_account['role'] = new_role
 
         accounts_collection.update_one({'_id': ObjectId(editable_action_account['_id'])},
@@ -322,7 +231,7 @@ class AccountsAuthorizedActions(Resource):
         return RESULT_OK()
 
     def listAccounts(self, token):
-        account = get_account_by_token(token)
+        account = get_account_by_token(accounts_collection, token)
 
         if account is None or account['role'] != 'moderator':
             return RESULT_FAIL_ON_CLIENT('Unknown token')
@@ -342,7 +251,7 @@ class AccountsAuthorizedActions(Resource):
         return RESULT_OK(result=found_accounts_slices)
 
     def getBio(self, token):
-        account = get_account_by_token(token)
+        account = get_account_by_token(accounts_collection, token)
 
         if account is None or account['role'] not in ['student', 'moderator']:
             return RESULT_FAIL_ON_CLIENT('Unknown token')
@@ -366,12 +275,12 @@ class AccountsAuthorizedActions(Resource):
             if not is_id_valid(user_id):
                 return RESULT_FAIL_ON_CLIENT('Invalid params')
 
-            searched_acc = get_account_by_id(user_id)
+            searched_acc = get_account_by_id(accounts_collection, user_id)
         elif username is not None:
             if not is_username_valid(username):
                 return RESULT_FAIL_ON_CLIENT('Invalid params')
 
-            searched_acc = get_account_by_username(username)
+            searched_acc = get_account_by_username(accounts_collection, username)
 
         if searched_acc is None:
             return RESULT_FAIL_ON_CLIENT('User not found')
@@ -383,7 +292,7 @@ class AccountsAuthorizedActions(Resource):
 
     def getPreferences(self, token):
         # TODO: +tests
-        account = get_account_by_token(token)
+        account = get_account_by_token(accounts_collection, token)
 
         if account is None:
             return RESULT_FAIL_ON_CLIENT('Unknown token')
@@ -397,7 +306,7 @@ class AccountsAuthorizedActions(Resource):
 
     def updatePreferences(self, token):
         # TODO: +tests
-        account = get_account_by_token(token)
+        account = get_account_by_token(accounts_collection, token)
 
         if account is None:
             return RESULT_FAIL_ON_CLIENT('Unknown token')
@@ -479,7 +388,7 @@ class AccountsUnauthorizedActions(Resource):
         if username is None or password is None:
             return RESULT_FAIL_ON_CLIENT('Missing username or password parameters')
 
-        account = get_account_by_username(username)
+        account = get_account_by_username(accounts_collection, username)
 
         if account is None:
             return RESULT_FAIL_ON_CLIENT('Unknown username or password')
@@ -516,7 +425,7 @@ api.add_resource(AccountsBasic, '/<string:token>', '/')
 api.add_resource(AccountsAuthorizedActions, '/<string:token>/<string:action>')
 
 if __name__ == '__main__':
-    # setup_logger()
+    # setup_logger(app, config)
 
     run_mode = os.environ.get('RUN_MODE')
 
