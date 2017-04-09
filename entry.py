@@ -1,7 +1,7 @@
 import json
 import os
 
-from bson import ObjectId
+from bson.objectid import ObjectId
 from flask import Flask
 from flask_restful import reqparse, Api, Resource, request
 from pymongo import MongoClient

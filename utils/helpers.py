@@ -4,7 +4,7 @@ import random
 import re
 
 import flask
-from bson import ObjectId
+from bson.objectid import ObjectId
 
 from utils.validators import is_username_valid, is_token_valid, is_id_valid
 
